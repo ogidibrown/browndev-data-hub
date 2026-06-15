@@ -1,107 +1,139 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findOrderByRef, updateOrderById } from "@/lib/firebase";
 import { placeOrder } from "@/lib/idata";
+import { log } from "@/lib/logger";
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const reference = searchParams.get("reference");
+const ROUTE = "paystack/verify";
+const APP = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-  if (!reference) {
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}?error=no_reference`);
+function redirect(path: string) {
+  return NextResponse.redirect(`${APP}${path}`);
+}
+
+async function fulfillOrder(reference: string) {
+  // 1. Verify payment with Paystack
+  const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+    headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+  });
+  const verifyData = await verifyRes.json();
+
+  if (!verifyData.status || verifyData.data?.status !== "success") {
+    log.warn(ROUTE, "Payment not successful", { reference, paystackStatus: verifyData.data?.status });
+    return { outcome: "payment_failed" as const };
   }
 
+  const meta = verifyData.data.metadata as Record<string, unknown>;
+
+  // 2. Load and cross-validate the Firestore order
+  const order = await findOrderByRef(reference);
+  if (!order || !order.id) {
+    log.error(ROUTE, "Order not found in Firestore", { reference });
+    return { outcome: "order_not_found" as const };
+  }
+
+  // 3. Idempotency — skip iDATA if already fulfilled
+  if (order.status === "Completed") {
+    log.info(ROUTE, "Order already completed, skipping iDATA", { reference, orderId: order.orderId });
+    return { outcome: "already_completed" as const, orderId: order.orderId };
+  }
+
+  // 4. Cross-validate metadata matches stored order to catch tampering
+  const networkMatch = meta.network === order.network;
+  const beneficiaryMatch = meta.beneficiary === order.beneficiary;
+  if (!networkMatch || !beneficiaryMatch) {
+    log.error(ROUTE, "Metadata mismatch — possible tampering", {
+      reference,
+      metaNetwork: meta.network,
+      storedNetwork: order.network,
+    });
+    await updateOrderById(order.id, { status: "Failed", updatedAt: new Date().toISOString() });
+    return { outcome: "metadata_mismatch" as const };
+  }
+
+  // 5. Place order with iDATA (retries handled inside placeOrder)
+  let idataResult;
   try {
-    // Verify with Paystack
-    const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      },
+    idataResult = await placeOrder({
+      network: order.network,
+      beneficiary: order.beneficiary,
+      "pa_data-bundle-packages": order.packageId,
     });
-    const verifyData = await verifyRes.json();
-
-    if (!verifyData.status || verifyData.data.status !== "success") {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}?error=payment_failed&ref=${reference}`
-      );
-    }
-
-    const meta = verifyData.data.metadata;
-
-    // Find Firestore doc
-    const order = await findOrderByRef(reference);
-    if (!order || !order.id) {
-      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}?error=order_not_found`);
-    }
-
-    // Place order with iDATA
-    const idataResult = await placeOrder({
-      network: meta.network,
-      beneficiary: meta.beneficiary,
-      "pa_data-bundle-packages": meta.packageId,
-    });
-
-    if (idataResult.status === "success") {
-      await updateOrderById(order.id, {
-        orderId: idataResult.order_id,
-        status: "Completed",
-        updatedAt: new Date().toISOString(),
-      });
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/order-status?ref=${reference}&status=success&order_id=${idataResult.order_id}`
-      );
-    } else {
-      await updateOrderById(order.id, { status: "Failed", updatedAt: new Date().toISOString() });
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/order-status?ref=${reference}&status=failed`
-      );
-    }
   } catch (err) {
-    console.error("Verify error:", err);
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/order-status?ref=${reference}&status=error`
-    );
+    log.error(ROUTE, "iDATA placeOrder threw exception", { reference, err: String(err) });
+    await updateOrderById(order.id, { status: "Failed", updatedAt: new Date().toISOString() });
+    return { outcome: "idata_error" as const };
+  }
+
+  if (idataResult.status === "success") {
+    await updateOrderById(order.id, {
+      orderId: idataResult.order_id,
+      status: "Completed",
+      updatedAt: new Date().toISOString(),
+    });
+    log.info(ROUTE, "Order fulfilled successfully", { reference, idataOrderId: idataResult.order_id });
+    return { outcome: "success" as const, orderId: idataResult.order_id };
+  } else {
+    await updateOrderById(order.id, { status: "Failed", updatedAt: new Date().toISOString() });
+    log.warn(ROUTE, "iDATA returned error status", { reference, idataResult });
+    return { outcome: "idata_error" as const };
   }
 }
 
-// Also support POST for inline Paystack callback
+// GET — Paystack redirect callback
+export async function GET(req: NextRequest) {
+  const reference = new URL(req.url).searchParams.get("reference");
+  if (!reference) return redirect("/?error=no_reference");
+
+  log.info(ROUTE, "GET verify called", { reference });
+
+  try {
+    const result = await fulfillOrder(reference);
+
+    switch (result.outcome) {
+      case "success":
+      case "already_completed":
+        return redirect(`/order-status?ref=${reference}&status=success&order_id=${result.orderId}`);
+      case "payment_failed":
+        return redirect(`/?error=payment_failed&ref=${reference}`);
+      case "metadata_mismatch":
+      case "idata_error":
+        return redirect(`/order-status?ref=${reference}&status=failed`);
+      case "order_not_found":
+        return redirect("/?error=order_not_found");
+    }
+  } catch (err) {
+    log.error(ROUTE, "Unhandled error in GET verify", { reference, err: String(err) });
+    return redirect(`/order-status?ref=${reference}&status=error`);
+  }
+}
+
+// POST — inline client-side verification
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { reference } = body;
   if (!reference) return NextResponse.json({ error: "No reference" }, { status: 400 });
 
+  log.info(ROUTE, "POST verify called", { reference });
+
   try {
-    const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
-    });
-    const verifyData = await verifyRes.json();
+    const result = await fulfillOrder(reference);
 
-    if (!verifyData.status || verifyData.data.status !== "success") {
-      return NextResponse.json({ error: "Payment not successful" }, { status: 400 });
+    switch (result.outcome) {
+      case "success":
+      case "already_completed":
+        return NextResponse.json({ status: "success", order_id: result.orderId });
+      case "payment_failed":
+        return NextResponse.json({ error: "Payment not successful" }, { status: 400 });
+      case "metadata_mismatch":
+        return NextResponse.json({ error: "Order metadata mismatch" }, { status: 400 });
+      case "idata_error":
+        return NextResponse.json({ error: "iDATA order failed" }, { status: 500 });
+      case "order_not_found":
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
-
-    const meta = verifyData.data.metadata;
-    const order = await findOrderByRef(reference);
-    if (!order || !order.id) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-
-    const idataResult = await placeOrder({
-      network: meta.network,
-      beneficiary: meta.beneficiary,
-      "pa_data-bundle-packages": meta.packageId,
-    });
-
-    if (idataResult.status === "success") {
-      await updateOrderById(order.id, {
-        orderId: idataResult.order_id,
-        status: "Completed",
-        updatedAt: new Date().toISOString(),
-      });
-      return NextResponse.json({ status: "success", order_id: idataResult.order_id });
-    } else {
-      await updateOrderById(order.id, { status: "Failed" });
-      return NextResponse.json({ error: "iDATA failed" }, { status: 500 });
-    }
-  } catch (err: unknown) {
+  } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    log.error(ROUTE, "Unhandled error in POST verify", { reference, err: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

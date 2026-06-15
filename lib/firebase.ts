@@ -11,6 +11,9 @@ import {
   limit,
   Timestamp,
   doc,
+  getAggregateFromServer,
+  sum,
+  count,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { OrderRecord } from "@/types";
@@ -68,4 +71,81 @@ export async function getRecentOrdersByEmail(email: string, count = 10) {
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrderRecord));
+}
+
+// ── Analytics aggregations (server-side, no document reads) ─────────────────
+
+export interface OrderStats {
+  total: number;
+  completed: number;
+  failed: number;
+  pending: number;
+  revenue: number;        // GHS — sum of amounts for Completed orders
+  todayCompleted: number;
+  todayRevenue: number;
+  monthCompleted: number;
+  monthRevenue: number;
+}
+
+export async function getOrderStats(): Promise<OrderStats> {
+  const col = ordersCol();
+
+  // Date boundaries
+  const startOfToday = Timestamp.fromDate(
+    new Date(new Date().setHours(0, 0, 0, 0))
+  );
+  const startOfMonth = Timestamp.fromDate(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
+
+  // Run all aggregation queries in parallel
+  const [totalAgg, completedAgg, failedAgg, pendingAgg, todayAgg, monthAgg] =
+    await Promise.all([
+      getAggregateFromServer(col, { total: count() }),
+
+      getAggregateFromServer(
+        query(col, where("status", "==", "Completed")),
+        { completed: count(), revenue: sum("amount") }
+      ),
+
+      getAggregateFromServer(
+        query(col, where("status", "==", "Failed")),
+        { failed: count() }
+      ),
+
+      getAggregateFromServer(
+        query(col, where("status", "==", "Pending")),
+        { pending: count() }
+      ),
+
+      getAggregateFromServer(
+        query(
+          col,
+          where("status", "==", "Completed"),
+          where("createdAt", ">=", startOfToday)
+        ),
+        { completed: count(), revenue: sum("amount") }
+      ),
+
+      getAggregateFromServer(
+        query(
+          col,
+          where("status", "==", "Completed"),
+          where("createdAt", ">=", startOfMonth)
+        ),
+        { completed: count(), revenue: sum("amount") }
+      ),
+    ]);
+
+  return {
+    total: totalAgg.data().total,
+    completed: completedAgg.data().completed,
+    failed: failedAgg.data().failed,
+    pending: pendingAgg.data().pending,
+    revenue: completedAgg.data().revenue ?? 0,
+    todayCompleted: todayAgg.data().completed,
+    todayRevenue: todayAgg.data().revenue ?? 0,
+    monthCompleted: monthAgg.data().completed,
+    monthRevenue: monthAgg.data().revenue ?? 0,
+  };
 }
