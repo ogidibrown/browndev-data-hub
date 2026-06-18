@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
-import { findOrderByRef, updateOrderById } from "@/lib/firebase";
+import { findOrderByRef, getBundleById, updateOrderById } from "@/lib/firebase";
 import { placeOrder } from "@/lib/idata";
 import { log } from "@/lib/logger";
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   const meta = (data.metadata ?? {}) as Record<string, unknown>;
 
-  // Find the Firestore order
+  // Load order from Firestore — source of truth
   const order = await findOrderByRef(reference);
   if (!order || !order.id) {
     log.error(ROUTE, "Order not found for webhook", { reference });
@@ -59,19 +59,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Cross-validate metadata
-  if (meta.network !== order.network || meta.beneficiary !== order.beneficiary) {
+  // Cross-validate metadata against stored order
+  if (meta.bundleId !== order.bundleId || meta.beneficiary !== order.beneficiary) {
     log.error(ROUTE, "Webhook: metadata mismatch", { reference });
     await updateOrderById(order.id, { status: "Failed", updatedAt: new Date().toISOString() });
     return NextResponse.json({ received: true });
   }
 
-  // Place order with iDATA
+  // Load bundle from Firestore to get idataPackageId — never trust any client-supplied value
+  const bundle = await getBundleById(order.bundleId);
+  if (!bundle) {
+    log.error(ROUTE, "Webhook: bundle not found", { reference, bundleId: order.bundleId });
+    await updateOrderById(order.id, { status: "Failed", updatedAt: new Date().toISOString() });
+    return NextResponse.json({ received: true });
+  }
+
+  // Place order with iDATA using backend-controlled values only
   try {
     const idataResult = await placeOrder({
       network: order.network,
       beneficiary: order.beneficiary,
-      "pa_data-bundle-packages": order.packageId,
+      "pa_data-bundle-packages": bundle.idataPackageId,
     });
 
     if (idataResult.status === "success") {

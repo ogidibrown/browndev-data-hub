@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { X, Home, ClipboardList, ShieldCheck, LogIn, UserPlus, LogOut } from "lucide-react";
+import { X, Home, ClipboardList, ShieldCheck, LogIn, UserPlus, LogOut, DollarSign, Info, HelpCircle, Phone } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -8,17 +8,23 @@ import { Wifi } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
-const GUEST_NAV = [
+const COMMON_NAV = [
   { icon: Home, label: "Buy Data", href: "/" },
+  { icon: DollarSign, label: "Pricing", href: "/pricing" },
   { icon: ClipboardList, label: "Track Order", href: "/order-status" },
-  { icon: ShieldCheck, label: "Verify Payment", href: "/order-status" },
+  { icon: HelpCircle, label: "FAQ", href: "/faq" },
+  { icon: Info, label: "About Us", href: "/about" },
+  { icon: Phone, label: "Contact", href: "/contact" },
+];
+
+const GUEST_NAV = [
+  ...COMMON_NAV,
   { icon: LogIn, label: "Login", href: "/login" },
   { icon: UserPlus, label: "Register", href: "/register" },
 ];
 
 const AUTH_NAV = [
-  { icon: Home, label: "Buy Data", href: "/" },
-  { icon: ClipboardList, label: "Track Order", href: "/order-status" },
+  ...COMMON_NAV,
   { icon: ShieldCheck, label: "Verify Payment", href: "/order-status" },
 ];
 
@@ -135,7 +141,7 @@ export default function MobileMenu({ open, onClose }: Props) {
         {/* Bottom CTA */}
         <div className="px-5 pb-10 pt-5 border-t border-white/10">
           <a
-            href="https://wa.me/233"
+            href="https://wa.me/233261493136"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 w-full bg-[#FFBB00] text-[#3D1A00] font-black text-sm py-3.5 rounded-xl tracking-wider uppercase"

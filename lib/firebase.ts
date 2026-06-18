@@ -4,6 +4,8 @@ import {
   collection,
   addDoc,
   updateDoc,
+  setDoc,
+  getDoc,
   query,
   where,
   getDocs,
@@ -16,7 +18,7 @@ import {
   count,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-import { OrderRecord } from "@/types";
+import { Bundle, OrderRecord } from "@/types";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -31,10 +33,35 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// ── Collection reference ──────────────────────────────────────────────────────
+// ── Collection references ─────────────────────────────────────────────────────
 const ordersCol = () => collection(db, "orders");
+const bundlesCol = () => collection(db, "bundles");
 
-// ── Create order ──────────────────────────────────────────────────────────────
+// ── Bundle functions ──────────────────────────────────────────────────────────
+
+export async function getBundleById(id: string): Promise<Bundle | null> {
+  const snap = await getDoc(doc(db, "bundles", id));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Bundle;
+}
+
+export async function getBundlesByNetwork(network: string): Promise<Bundle[]> {
+  const q = query(
+    bundlesCol(),
+    where("network", "==", network),
+    where("active", "==", true),
+    orderBy("dataSize", "asc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Bundle));
+}
+
+export async function upsertBundle(id: string, data: Omit<Bundle, "id">): Promise<void> {
+  await setDoc(doc(db, "bundles", id), data);
+}
+
+// ── Order functions ───────────────────────────────────────────────────────────
+
 export async function createOrder(data: Omit<OrderRecord, "id">) {
   const docRef = await addDoc(ordersCol(), {
     ...data,
@@ -43,7 +70,6 @@ export async function createOrder(data: Omit<OrderRecord, "id">) {
   return docRef.id;
 }
 
-// ── Update order by Firestore document id ────────────────────────────────────
 export async function updateOrderById(
   docId: string,
   updates: Partial<OrderRecord>
@@ -52,7 +78,6 @@ export async function updateOrderById(
   await updateDoc(ref, { ...updates, updatedAt: Timestamp.now() });
 }
 
-// ── Find order by Paystack reference ─────────────────────────────────────────
 export async function findOrderByRef(paystackRef: string) {
   const q = query(ordersCol(), where("paystackRef", "==", paystackRef), limit(1));
   const snap = await getDocs(q);
@@ -61,26 +86,25 @@ export async function findOrderByRef(paystackRef: string) {
   return { id: d.id, ...d.data() } as OrderRecord;
 }
 
-// ── Recent orders by email ────────────────────────────────────────────────────
-export async function getRecentOrdersByEmail(email: string, count = 10) {
+export async function getRecentOrdersByEmail(email: string, n = 10) {
   const q = query(
     ordersCol(),
     where("email", "==", email),
     orderBy("createdAt", "desc"),
-    limit(count)
+    limit(n)
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrderRecord));
 }
 
-// ── Analytics aggregations (server-side, no document reads) ─────────────────
+// ── Analytics aggregations ────────────────────────────────────────────────────
 
 export interface OrderStats {
   total: number;
   completed: number;
   failed: number;
   pending: number;
-  revenue: number;        // GHS — sum of amounts for Completed orders
+  revenue: number;
   todayCompleted: number;
   todayRevenue: number;
   monthCompleted: number;
@@ -90,7 +114,6 @@ export interface OrderStats {
 export async function getOrderStats(): Promise<OrderStats> {
   const col = ordersCol();
 
-  // Date boundaries
   const startOfToday = Timestamp.fromDate(
     new Date(new Date().setHours(0, 0, 0, 0))
   );
@@ -98,7 +121,6 @@ export async function getOrderStats(): Promise<OrderStats> {
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
 
-  // Run all aggregation queries in parallel
   const [totalAgg, completedAgg, failedAgg, pendingAgg, todayAgg, monthAgg] =
     await Promise.all([
       getAggregateFromServer(col, { total: count() }),

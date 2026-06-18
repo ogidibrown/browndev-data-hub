@@ -32,10 +32,10 @@ export default function PackagePicker({ packages, selected, onSelect, loading }:
   return (
     <div className="grid grid-cols-3 lg:grid-cols-4 gap-2.5 lg:gap-3">
       {packages.map((pkg) => {
-        const isActive = selected?.package_id === pkg.package_id;
+        const isActive = selected?.id === pkg.id;
         return (
           <button
-            key={pkg.package_id}
+            key={pkg.id}
             onClick={() => onSelect(pkg)}
             className={clsx(
               "relative flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-4 lg:py-5 transition-all duration-150 cursor-pointer",
@@ -50,13 +50,13 @@ export default function PackagePicker({ packages, selected, onSelect, loading }:
               </span>
             )}
             <span className={clsx("text-xl lg:text-2xl font-black leading-none", isActive ? "text-white" : "text-[#1E293B]")}>
-              {pkg.data_size}GB
+              {pkg.dataSize}GB
             </span>
             <span className={clsx("text-[10px] font-semibold mt-0.5", isActive ? "text-blue-200" : "text-slate-400")}>
-              {pkg.label && pkg.label !== String(pkg.data_size) ? pkg.label : "Bundle"}
+              {pkg.label || "Bundle"}
             </span>
             <span className={clsx("text-xs font-black mt-1", isActive ? "text-blue-100" : "text-[#2B4EC8]")}>
-              GHS {pkg.price.toFixed(2)}
+              GHS {pkg.sellingPrice.toFixed(2)}
             </span>
           </button>
         );

@@ -62,9 +62,9 @@ export default function CheckoutForm({ network, pkg, onSubmit, loading }: Props)
             <span className={clsx("text-xs font-black px-2.5 py-1 rounded-full border", badgeClass)}>
               {label}
             </span>
-            <span className="text-sm font-bold text-[#1E293B]">{pkg.data_size}GB Bundle</span>
+            <span className="text-sm font-bold text-[#1E293B]">{pkg.dataSize}GB Bundle</span>
           </div>
-          <span className="text-lg font-black text-[#2B4EC8] whitespace-nowrap">GHS {pkg.price.toFixed(2)}</span>
+          <span className="text-lg font-black text-[#2B4EC8] whitespace-nowrap">GHS {pkg.sellingPrice.toFixed(2)}</span>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export default function CheckoutForm({ network, pkg, onSubmit, loading }: Props)
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
           <>
-            Proceed to Payment · GHS {pkg.price.toFixed(2)}
+            Proceed to Payment · GHS {pkg.sellingPrice.toFixed(2)}
             <ArrowRight className="h-4 w-4" />
           </>
         )}

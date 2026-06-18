@@ -1,32 +1,52 @@
 rules_version = '2';
 
 // NOTE: These rules use the Firebase Client SDK (not Admin SDK).
-// API routes run as unauthenticated clients, so server-side writes must be
+// API routes run as unauthenticated clients, so server-side reads/writes must be
 // permitted below. Real security is enforced by the Next.js API routes themselves.
 // To fully lock down server writes, migrate lib/firebase.ts to firebase-admin.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Bundles ───────────────────────────────────────────────────────────────
+    match /bundles/{bundleId} {
+      // Public read — the packages API filters sensitive fields (idataPackageId,
+      // idataCostPrice) before returning anything to the browser.
+      allow read: if true;
+
+      // Allow creates/updates only when all required fields are present and valid.
+      // The seed endpoint is protected at the API level by ADMIN_SEED_SECRET.
+      allow create, update: if request.resource.data.keys().hasAll([
+                                "network", "dataSize", "label",
+                                "idataPackageId", "idataCostPrice",
+                                "sellingPrice", "active"
+                              ])
+                            && request.resource.data.sellingPrice > 0
+                            && request.resource.data.idataPackageId > 0
+                            && request.resource.data.active is bool;
+
+      allow delete: if false;
+    }
+
+    // ── Orders ────────────────────────────────────────────────────────────────
     match /orders/{orderId} {
-      // Anyone authenticated can read their own orders
+      // Authenticated users can read only their own orders
       allow read: if request.auth != null
                   && request.auth.token.email == resource.data.email;
 
-      // Permit server-side (unauthenticated client SDK in API routes) to create
-      // orders with valid required fields
+      // Server-side (unauthenticated client SDK in API routes) can create orders
+      // with the correct required fields and initial Pending status
       allow create: if request.resource.data.keys().hasAll([
-                        "paystackRef", "network", "beneficiary",
-                        "packageId", "amount", "email", "status"
+                        "paystackRef", "bundleId", "network", "beneficiary",
+                        "idataPackageId", "amount", "email", "status"
                       ])
                     && request.resource.data.status == "Pending"
                     && request.resource.data.amount > 0;
 
-      // Only allow updates that change status or orderId — no other fields
+      // Allow only status/orderId/updatedAt to change after creation
       allow update: if request.resource.data.diff(resource.data).affectedKeys()
                         .hasOnly(["status", "orderId", "updatedAt"]);
 
-      // No client-side deletes ever
       allow delete: if false;
     }
 

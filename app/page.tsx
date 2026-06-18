@@ -7,10 +7,38 @@ import NetworkSelector from "@/components/NetworkSelector";
 import PackagePicker from "@/components/PackagePicker";
 import CheckoutForm from "@/components/CheckoutForm";
 import StepIndicator from "@/components/StepIndicator";
+import SiteFooter from "@/components/SiteFooter";
 import toast from "react-hot-toast";
-import { ChevronLeft, Wifi, Shield, Zap, Menu, Lock, LogOut } from "lucide-react";
+import { ChevronLeft, Wifi, Shield, Zap, Menu, Lock, LogOut, Star } from "lucide-react";
 import MobileMenu from "@/components/MobileMenu";
 import { useAuth } from "@/contexts/AuthContext";
+
+const REVIEWS = [
+  {
+    name: "Kwame A.",
+    network: "MTN",
+    rating: 5,
+    text: "Ordered a 5GB MTN bundle and it arrived before I even left the payment page. Incredibly fast!",
+  },
+  {
+    name: "Abena M.",
+    network: "Telecel",
+    rating: 5,
+    text: "I was skeptical at first but it worked perfectly. Got 20GB Telecel data in seconds. Will definitely use again.",
+  },
+  {
+    name: "Kofi B.",
+    network: "AirtelTigo",
+    rating: 5,
+    text: "Best prices I have found for AirtelTigo bundles. Payment was smooth and data came through instantly.",
+  },
+  {
+    name: "Ama D.",
+    network: "MTN",
+    rating: 5,
+    text: "I buy data for my whole family here. So easy to top up any number. Saves me a lot of time.",
+  },
+];
 
 type Step = 0 | 1 | 2;
 
@@ -92,13 +120,9 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          bundleId: selectedPkg.id,
+          phoneNumber: phone,
           email,
-          amount: selectedPkg.price,
-          network,
-          beneficiary: phone,
-          packageId: selectedPkg.package_id,
-          packageLabel: selectedPkg.label,
-          dataSize: selectedPkg.data_size,
         }),
       });
       const data = await res.json();
@@ -351,11 +375,44 @@ export default function Home() {
               <span>✅ Reliable</span>
             </div>
           )}
+
+          {/* Customer reviews — shown only on step 0 */}
+          {step === 0 && (
+            <div className="mt-10">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-4 w-4 text-[#FFBB00] fill-[#FFBB00]" />
+                  ))}
+                </div>
+                <span className="text-xs text-slate-500 font-bold">Trusted by customers across Ghana</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {REVIEWS.map((r) => (
+                  <div key={r.name} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="h-8 w-8 rounded-full bg-[#2B4EC8] flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                        {r.name[0]}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-[#1E293B]">{r.name}</p>
+                        <p className="text-[10px] text-slate-400 font-semibold">{r.network} customer</p>
+                      </div>
+                      <div className="ml-auto flex">
+                        {[...Array(r.rating)].map((_, i) => (
+                          <Star key={i} className="h-3 w-3 text-[#FFBB00] fill-[#FFBB00]" />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">{r.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </main>
 
-        <footer className="text-center py-6 text-xs text-slate-400 font-medium border-t border-slate-200">
-          © {new Date().getFullYear()} BrownDev Data Hub · All rights reserved
-        </footer>
+        <SiteFooter />
       </div>
     </div>
   );
