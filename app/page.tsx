@@ -1,6 +1,5 @@
 "use client";
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Network, DataPackage } from "@/types";
 import NetworkSelector from "@/components/NetworkSelector";
@@ -70,7 +69,6 @@ export default function Home() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout } = useAuth();
-  const router = useRouter();
 
   const handleLogout = async () => {
     await logout();
@@ -96,11 +94,6 @@ export default function Home() {
   }, []);
 
   const handleNetworkSelect = (net: Network) => {
-    if (!user) {
-      toast.error("Sign in to buy data");
-      router.push("/login");
-      return;
-    }
     setNetwork(net);
     setSelectedPkg(null);
     setStep(1);
@@ -326,15 +319,13 @@ export default function Home() {
               </p>
               <NetworkSelector selected={network} onSelect={handleNetworkSelect} />
 
-              {/* Auth prompt — only shown to guests */}
+              {/* Optional sign-in nudge for guests */}
               {!user && (
                 <div className="mt-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                   <Lock className="h-4 w-4 text-[#2B4EC8] flex-shrink-0" />
                   <p className="text-sm text-[#1E293B] font-medium">
                     <Link href="/login" className="text-[#2B4EC8] font-black hover:underline">Sign in</Link>
-                    {" "}or{" "}
-                    <Link href="/register" className="text-[#2B4EC8] font-black hover:underline">create an account</Link>
-                    {" "}to buy data
+                    {" "}to track your order history — or just buy as a guest below.
                   </p>
                 </div>
               )}
