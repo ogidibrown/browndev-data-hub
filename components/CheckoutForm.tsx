@@ -41,8 +41,8 @@ export default function CheckoutForm({ network, pkg, onSubmit, loading }: Props)
         newErrors.phone = `Use a valid ${label} number (e.g. ${prefixes[0]}XXXXXXX)`;
       }
     }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Enter a valid email address";
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Enter a valid email address or leave it blank";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -95,7 +95,7 @@ export default function CheckoutForm({ network, pkg, onSubmit, loading }: Props)
       {/* Email field */}
       <div>
         <label className="block text-sm font-bold text-[#1E293B] mb-1.5">
-          Your Email <span className="text-slate-400 font-normal">(for receipt)</span>
+          Email Address <span className="text-slate-400 font-normal text-xs">(optional — for receipt)</span>
         </label>
         <div className="relative">
           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -113,6 +113,11 @@ export default function CheckoutForm({ network, pkg, onSubmit, loading }: Props)
           />
         </div>
         {errors.email && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.email}</p>}
+        {!errors.email && (
+          <p className="text-slate-400 text-xs mt-1">
+            No email? Leave blank — your order confirmation is shown on screen.
+          </p>
+        )}
       </div>
 
       {/* Submit */}

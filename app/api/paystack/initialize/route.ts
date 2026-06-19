@@ -43,12 +43,12 @@ export async function POST(req: NextRequest) {
       email?: string;
     };
 
-    if (!bundleId || !phoneNumber || !email) {
+    if (!bundleId || !phoneNumber) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Validate email
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    // Validate email only if provided
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
 
@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
       remaining,
     });
 
+    // Use provided email or generate a placeholder — Paystack requires an email field
+    const resolvedEmail = email?.trim()
+      ? email.trim()
+      : `${localPhone}@browndevdata.com`;
+
     // Initialize Paystack using the backend-controlled selling price — never the frontend value
     const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email: email.trim(),
+        email: resolvedEmail,
         amount: Math.round(bundle.sellingPrice * 100), // pesewas
         currency: "GHS",
         callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/paystack/verify`,
@@ -103,7 +108,7 @@ export async function POST(req: NextRequest) {
           // Only what we need to cross-validate on the other side
           bundleId: bundle.id,
           beneficiary: phone,
-          email: email.trim(),
+          email: resolvedEmail,
         },
       }),
     });
@@ -131,7 +136,7 @@ export async function POST(req: NextRequest) {
       amount: bundle.sellingPrice,
       status: "Pending",
       paystackRef: reference,
-      email: email.trim(),
+      email: resolvedEmail,
       createdAt: new Date().toISOString(),
     });
 
