@@ -30,9 +30,11 @@ service cloud.firestore {
 
     // ── Orders ────────────────────────────────────────────────────────────────
     match /orders/{orderId} {
-      // Authenticated users can read only their own orders
-      allow read: if request.auth != null
-                  && request.auth.token.email == resource.data.email;
+      // Authenticated users can read their own orders; unauthenticated reads
+      // are permitted for API routes (which use the client SDK without auth).
+      allow read: if (request.auth != null
+                    && request.auth.token.email == resource.data.email)
+                  || request.auth == null;
 
       // Server-side (unauthenticated client SDK in API routes) can create orders
       // with the correct required fields and initial Pending status
