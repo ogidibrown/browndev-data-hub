@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       dataSize: bundle.dataSize,
       amount: bundle.sellingPrice,
       status: "Pending",
-      paymentRef,
+      paystackRef: paymentRef,
       email: email.trim(),
       createdAt: new Date().toISOString(),
     });
