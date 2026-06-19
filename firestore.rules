@@ -37,7 +37,7 @@ service cloud.firestore {
       // Server-side (unauthenticated client SDK in API routes) can create orders
       // with the correct required fields and initial Pending status
       allow create: if request.resource.data.keys().hasAll([
-                        "paymentRef", "bundleId", "network", "beneficiary",
+                        "paystackRef", "bundleId", "network", "beneficiary",
                         "idataPackageId", "amount", "email", "status"
                       ])
                     && request.resource.data.status == "Pending"

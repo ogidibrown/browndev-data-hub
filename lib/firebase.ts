@@ -78,8 +78,8 @@ export async function updateOrderById(
   await updateDoc(ref, { ...updates, updatedAt: Timestamp.now() });
 }
 
-export async function findOrderByRef(paymentRef: string) {
-  const q = query(ordersCol(), where("paymentRef", "==", paymentRef), limit(1));
+export async function findOrderByRef(paystackRef: string) {
+  const q = query(ordersCol(), where("paystackRef", "==", paystackRef), limit(1));
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
