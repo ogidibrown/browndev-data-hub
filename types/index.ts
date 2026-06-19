@@ -31,7 +31,7 @@ export interface OrderRecord {
   dataSize: number;          // snapshotted for display
   amount: number;            // selling price paid — always sourced from Firestore, never frontend
   status: "Pending" | "Completed" | "Failed";
-  paystackRef: string;
+  paymentRef: string;
   orderId?: number;          // iDATA order_id set after successful fulfillment
   email: string;
   createdAt: Date | string;
