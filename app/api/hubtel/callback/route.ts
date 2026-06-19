@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const idataResult = await placeOrder({
       network: order.network,
       beneficiary: order.beneficiary,
-      "pa_data-bundle-packages": bundle.idataPackageId,
+      "pa_data-bundle-packages": String(bundle.dataSize),
     });
 
     if (idataResult.status === "success") {

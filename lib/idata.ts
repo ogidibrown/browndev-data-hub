@@ -47,7 +47,7 @@ export async function fetchPackages(network: string) {
 export async function placeOrder(payload: {
   network: string;
   beneficiary: string;
-  "pa_data-bundle-packages": number;
+  "pa_data-bundle-packages": string;
 }) {
   return withRetry(async () => {
     const res = await fetchWithTimeout(`${BASE}/place-order`, {

@@ -75,11 +75,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Place order with iDATA using backend-controlled values only
+  // iDATA expects the label string ("1", "2", "3"…) not the numeric package_id
   try {
     const idataResult = await placeOrder({
       network: order.network,
       beneficiary: order.beneficiary,
-      "pa_data-bundle-packages": bundle.idataPackageId,
+      "pa_data-bundle-packages": String(bundle.dataSize),
     });
 
     if (idataResult.status === "success") {

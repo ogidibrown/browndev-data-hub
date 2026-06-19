@@ -57,12 +57,13 @@ async function fulfillOrder(reference: string) {
   }
 
   // 6. Place order with iDATA using backend-controlled values only
+  // iDATA expects the label string ("1", "2", "3"…) not the numeric package_id
   let idataResult;
   try {
     idataResult = await placeOrder({
       network: order.network,
       beneficiary: order.beneficiary,
-      "pa_data-bundle-packages": bundle.idataPackageId,
+      "pa_data-bundle-packages": String(bundle.dataSize),
     });
   } catch (err) {
     log.error(ROUTE, "iDATA placeOrder threw exception", { reference, err: String(err) });
