@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
         email: email.trim(),
         amount: Math.round(bundle.sellingPrice * 100), // pesewas
         currency: "GHS",
+        bearer: "customer", // Paystack fee added on top — customer pays it, merchant receives full selling price
         callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/paystack/verify`,
         metadata: {
           // Only what we need to cross-validate on the other side
